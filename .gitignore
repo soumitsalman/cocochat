@@ -1,0 +1,4 @@
+/.deployment
+/.env
+/.vscode
+/__pycache__
