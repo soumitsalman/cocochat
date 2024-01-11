@@ -1,24 +1,32 @@
 import os
 import config
 from slack_bolt import App
-from slack_bolt.adapter.socket_mode import SocketModeHandler
+
 
 # set up the initial app
-app = App(
+bolt_app = App(
     token=config.get_slack_bot_token(),
     signing_secret=config.get_slack_signing_secret()
 )
 
-@app.message("ping")
+@bolt_app.message("ping")
 def respond_ping(message, say):
     resp = f"Pong to <@{message['user']}>"
     print(resp)
     say(resp)
 
-def start_app():
-    app.start(port = 8000)
+from flask import Flask, request
+app = Flask(__name__)
+
+from slack_bolt.adapter.flask import SlackRequestHandler
+handler = SlackRequestHandler(bolt_app)
+
+@app.route("/slack/events", methods=["POST"])
+def slack_events():
+    return handler.handle(request)
+   
 
 
-# start the slack app
+# start the app
 if __name__ == "__main__":
-    start_app()
+    app.run(port = 8000)
