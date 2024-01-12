@@ -1,20 +1,6 @@
-import os
-import config
-from slack_bolt import App
+from slack_app import bolt_app
 
-
-# set up the initial app
-bolt_app = App(
-    token=config.get_slack_bot_token(),
-    signing_secret=config.get_slack_signing_secret()
-)
-
-@bolt_app.message("ping")
-def respond_ping(message, say):
-    resp = f"Pong to <@{message['user']}>"
-    print(resp)
-    say(resp)
-
+# code for production deployment in azure app service
 from flask import Flask, request
 app = Flask(__name__)
 
@@ -24,8 +10,6 @@ handler = SlackRequestHandler(bolt_app)
 @app.route("/slack/events", methods=["POST"])
 def slack_events():
     return handler.handle(request)
-   
-
 
 # start the app
 if __name__ == "__main__":
