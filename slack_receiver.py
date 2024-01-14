@@ -3,7 +3,6 @@ from icecream import ic
 from slack_bolt import App
 from chatsessions import queue_user_message, get_response
 
-
 # set up the initial app
 app = App(
     token=config.get_slack_bot_token(),
@@ -21,7 +20,6 @@ def receive_message(message, say, client):
 
 @app.event("app_mention")
 def receive_mention(event, say, client):
-    ic(event)
     new_message(
         message_or_event = event,
         needs_response=True, # always respond when mentioned
@@ -32,15 +30,18 @@ def receive_mention(event, say, client):
 def new_message(message_or_event, needs_response, say, slack_client): 
     # queue message no matter what
     # TODO: santize text to remove the mark down
-    queue_user_message(message_or_event['channel'], message_or_event['user'], message_or_event['text'])
+    queue_user_message(message_or_event['channel'], message_or_event['user'], ic(message_or_event['text']))
 
     # either IM or got mentoned
     if needs_response:
-        wait_msg = say(":hourglass_flowing_sand: 'Ol On!")
+        # wait_msg = say(":hourglass_flowing_sand: 'Ol On!")
+        slack_client.reaction_add(
+            channel = message_or_event["channel"],
+            timestamp = message_or_event["ts"],
+            name = "hourglass_flowing_sand"
+        )
         resp = get_response(message_or_event['channel'])
-        slack_client.chat_update(
-            channel=message_or_event['channel'], 
-            ts=wait_msg['ts'], 
+        say(
             text = resp,
             blocks=[create_markdown_block(resp)]
         )

@@ -17,7 +17,6 @@ def get_session(channel):
 
 def queue_user_message(channel, user, message):
     get_session(channel).add_to_thread(message, name=user)
-    ic("added to " + channel)
 
 def get_response(channel):
     return get_session(channel).run_thread()
