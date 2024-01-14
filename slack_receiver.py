@@ -35,7 +35,7 @@ def new_message(message_or_event, needs_response, say, slack_client):
     # either IM or got mentoned
     if needs_response:
         # wait_msg = say(":hourglass_flowing_sand: 'Ol On!")
-        slack_client.app.client.reactions_add(
+        slack_client.reactions_add(
             channel = message_or_event["channel"],
             timestamp = message_or_event["ts"],
             name = "hourglass_flowing_sand"
