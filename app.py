@@ -28,7 +28,7 @@ if __name__ == "__main__":
         def slack_events():
             return handler.handle(request)
         
-        app.run()
+        app.run(port=8000)
 
     else: # MODE == "SOCKET"        
         handler = SocketModeHandler(slack_receiver.app, config.get_slack_app_token())
