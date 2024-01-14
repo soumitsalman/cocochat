@@ -1,3 +1,5 @@
 slack-bolt
 icecream
 Flask
+openai
+openai-utilities

@@ -1,16 +1,35 @@
-from slack_app import bolt_app
-
-# code for production deployment in azure app service
+# this can run on either SOCKET mode or HTTP mode
+import slack_receiver
 from flask import Flask, request
-app = Flask(__name__)
-
 from slack_bolt.adapter.flask import SlackRequestHandler
-handler = SlackRequestHandler(bolt_app)
+from slack_bolt.adapter.socket_mode import SocketModeHandler
+import config
 
-@app.route("/slack/events", methods=["POST"])
-def slack_events():
-    return handler.handle(request)
+# this can run on either SOCKET mode or HTTP mode
+# socket mode requires that in the slack app management portal "Socket Mode" is turned on
+MODE = "HTTP" # "SOCKET"
+
+
+# app = Flask(__name__)
+# handler = SlackRequestHandler(bolt_app)
+
+# @app.route("/slack/events", methods=["POST"])
+# def slack_events():
+#     return handler.handle(request)
 
 # start the app
 if __name__ == "__main__":
-    app.run(port = 8000)
+    if MODE == "HTTP":
+        # HTTP mode is powered by flask
+        app = Flask(__name__)
+        handler = SlackRequestHandler(slack_receiver.app)
+
+        @app.route("/slack/events", methods=["POST"])
+        def slack_events():
+            return handler.handle(request)
+        
+        app.run()
+
+    else: # MODE == "SOCKET"        
+        handler = SocketModeHandler(slack_receiver.app, config.get_slack_app_token())
+        handler.start()
