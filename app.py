@@ -8,6 +8,7 @@ app = Flask(__name__)
 handler = SlackRequestHandler(slack_receiver.app)
 
 @app.route("/slack/events", methods=["POST"])
+@app.route("/slack/command", methods=["POST"])
 def slack_events():
     return handler.handle(request)
 

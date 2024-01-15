@@ -2,7 +2,7 @@ import config
 from icecream import ic
 from slack_bolt import App
 from slack_sdk.errors import SlackApiError
-from chatsessions import queue_user_message, get_response
+from chatsessions import queue_user_message, get_response, switch_model
 import re
 
 # set up the initial app
@@ -15,7 +15,8 @@ app = App(
 def receive_message(message, say, client): 
     new_message(
         message_or_event = message, 
-        needs_response=message['channel_type'] == "im", # in a DM the conversation is usually ping pong, so respond
+        # in a DM the conversation or call out of the bot name is usually ping pong, so respond
+        needs_response=((message['channel_type'] == "im") or config.get_llm_chat_bot_name() in message['text']), 
         say = say, 
         slack_client = client, 
     )
@@ -28,6 +29,13 @@ def receive_mention(event, say, client):
         say=say, 
         slack_client=client
     )
+
+@app.command("/model")
+def receive_command(ack, say, command):
+    ack()
+    new_model = command['text'].strip()
+    res = switch_model(command['channel_id'], new_model)
+    say(f":exclamation: Running model {new_model}" if res else ":shit: Failed updating model")
 
 @app.event("app_home_opened")
 def update_home_tab(client, event):
@@ -43,8 +51,8 @@ def new_message(message_or_event, needs_response, say, slack_client):
     # queue message no matter what    
     queue_user_message(
         message_or_event['channel'], 
-        ic(get_user_data(message_or_event['user'], slack_client)['name']), 
-        ic(sanitize_message_text(ic(message_or_event['text']), slack_client)))
+        get_user_data(message_or_event['user'], slack_client)['name'], 
+        ic(sanitize_message_text(message_or_event['text'], slack_client)))
 
     # either IM or got mentoned
     if needs_response:
