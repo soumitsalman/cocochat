@@ -20,13 +20,11 @@ Azure endpoint for the service: http://cocochat-test.azurewebsites.net/
     - gpt-3.5-turbo-1106
 - [x] In direct message mode the chat bot will respond to every user message
 - [x] In channel/group conversation it will ONLY respond if the message mentions the app/bot
-- [ ] Slack input message markdown santization/normalization
+- [x] Slack input message markdown santization/normalization
+- [ ] Reading conversation history if it joins the channel later
 - [ ] Ability to switch underlying LLM without loosing the chat context
 - [ ] Ability to switch the LLM instructions during runtime by a user
 - [ ] Internet search ability
-
-#### Known Bugs:
-Due to lack of input message santization the bot can confuse between multiple users. It also does not know its own user name and confuses itself as yet another user.
 
 ### Dependencies:
 Uses https://github.com/soumitsalman/openai-utilities (pip install openai-utilities) SDK as the wrapper on top of openai SDK.
