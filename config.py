@@ -17,7 +17,7 @@ def get_llm_service_base_url() -> str:
     return os.getenv("ANYSCALE_BASE_URL")
 
 def get_llm_chat_model() -> str:
-    return config_file["LANGUAGE_MODEL"]
+    return os.getenv("LANGUAGE_MODEL")
 
 def get_chat_bot_instructions() -> str:
     return config_file["INSTRUCTION"]
