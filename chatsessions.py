@@ -20,3 +20,4 @@ def queue_user_message(channel, user, message):
 
 def get_response(channel):
     return get_session(channel).run_thread()
+    # return "FAKE RESPONSE @beast.unleashed in #cocochat_testing cause #yolo"

@@ -1,7 +1,9 @@
 import config
 from icecream import ic
 from slack_bolt import App
+from slack_sdk.errors import SlackApiError
 from chatsessions import queue_user_message, get_response
+import re
 
 # set up the initial app
 app = App(
@@ -27,10 +29,22 @@ def receive_mention(event, say, client):
         slack_client=client
     )
 
-def new_message(message_or_event, needs_response, say, slack_client): 
-    # queue message no matter what
-    # TODO: santize text to remove the mark down
-    queue_user_message(message_or_event['channel'], message_or_event['user'], ic(message_or_event['text']))
+@app.event("app_home_opened")
+def update_home_tab(client, event):
+    client.views_publish(
+        user_id = event['user'],
+        view = {
+            "type": "home",
+            "blocks": get_home_page_blocks(event['user'])
+        }
+    )
+
+def new_message(message_or_event, needs_response, say, slack_client):     
+    # queue message no matter what    
+    queue_user_message(
+        message_or_event['channel'], 
+        ic(get_user_data(message_or_event['user'], slack_client)['name']), 
+        ic(sanitize_message_text(ic(message_or_event['text']), slack_client)))
 
     # either IM or got mentoned
     if needs_response:
@@ -46,15 +60,20 @@ def new_message(message_or_event, needs_response, say, slack_client):
             blocks=[create_markdown_block(resp)]
         )
 
-@app.event("app_home_opened")
-def update_home_tab(client, event):
-    client.views_publish(
-        user_id = event['user'],
-        view = {
-            "type": "home",
-            "blocks": get_home_page_blocks(event['user'])
-        }
-    )
+def sanitize_message_text(text: str, slack_client):
+    # this is a function within a function because the signature of extract_ids function is allowed to take only 1 parameter as required by re.sub
+    # this way i can use the slack_event value
+	def extract_ids(match):
+		matched_text = match.group(0)        
+		if matched_text.startswith("<@") and matched_text.endswith(">"):
+			user_id = matched_text[2:-1]
+			return get_user_data(user_id, slack_client)['name']
+		elif matched_text.startswith('<#') and matched_text.endswith('>'):
+			channel_id, channel_name = matched_text[2:-1].split('|')
+            # if there is no channel name in the expression it means its a private channel
+			return f"#{(channel_name if channel_name != '' else get_channel_data(channel_id, slack_client)['name'])} channel"
+	
+	return re.sub(r'<@[\w]+>|<#[\w]+\|[\w]*>', extract_ids, text)
 
 # create a markdown text block after converting openai markdowns to slack markdowns
 def create_markdown_block(text: str):
@@ -82,93 +101,60 @@ def create_markdown_block(text: str):
 
 # home page block
 def get_home_page_blocks(user_id):
-    return [
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": f"<@{user_id}> Wagwan mi bredah! How yu be?"
+    return config.get_home_page_content()
+
+# team/workspace data
+_users = {}
+_channels = {}
+# structure is expected to be
+# _users = {
+#     "<user_id_value>": {
+#         "id": "<user_id_value>",
+#         "name": "<name_value>",
+#         "long_name": "<long_name_value>"
+# 	}
+# }
+
+# _channels = {
+#     "<channel_id_value>": {
+#         "id": "<channel_id_value>",
+#         "name": "<name_value>",
+#         "is_im": True/False,
+#		  "users": [ ... list of user ids ... ]
+# 	}
+# }
+
+def get_user_data(user_id, slack_client):
+    # user_id = message_or_event['user']
+    if user_id not in _users:           
+        try:
+            user_data = slack_client.users_info(user = user_id)['user']
+            _users[user_id] = {
+				"name": user_data['name'],
+				"long_name": user_data['real_name']
 			}
-		},
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": f"I is *cocochat*. My deddy is Manolo (Danny) y Cabeza Huevo (Soumit). Yes, I has 2 deddys! Ma' deddys put _{config.get_llm_chat_model()}_ up my culito for your entertainment (its some ghetto ass shit be they is broke sooo .. :man-shrugging:). Poke around and I might even like it :eggplant:"
+        except SlackApiError: # user is in accessible
+            _users[user_id] = {
+				"name": "UNKNOWN.USER",
+				"long_name": "UNKNOWN USER"
 			}
-		},
-		{
-			"type": "header",
-			"text": {
-				"type": "plain_text",
-				"text": "Serious Shits"
+            
+    return _users[user_id]
+
+def get_channel_data(channel_id, slack_client):
+    if channel_id not in _channels: # cache data
+        try:
+            channel_data = slack_client.conversations_info(channel = channel_id)['channel']
+            _channels[channel_id] = {
+				# for channels use the channel name and for DMs this will be None
+				"name": channel_data.get("name"),
+				"is_im": channel_data['is_im']
 			}
-		},
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": "*DO NOT* put any password (or some shit like that) cause there is *ZERO* security and privacy up in this bitch :skull_and_crossbones:"
-			}
-		},
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": "*Supported Language Models*"
-			}
-		},
-		{
-			"type": "section",
-			"fields": [
-				{
-					"type": "plain_text",
-					"text": "gpt-4-1106-preview"
-				},
-				{
-					"type": "plain_text",
-					"text": "gpt-3.5-turbo-1106"
-				},
-				{
-					"type": "plain_text",
-					"text": "mistralai/Mixtral-8x7B-Instruct-v0.1"
-				},
-				{
-					"type": "plain_text",
-					"text": "codellama/CodeLlama-34b-Instruct-hf"
-				},
-				{
-					"type": "plain_text",
-					"text": "meta-llama/Llama-2-13b-chat-hf"
-				},
-				{
-					"type": "plain_text",
-					"text": "HuggingFaceH4/zephyr-7b-beta"
-				}
-			]
-		},
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": "*References*"
-			}
-		},
-		{
-			"type": "section",
-			"fields": [
-				{
-					"type": "mrkdwn",
-					"text": "<https://github.com/soumitsalman/|GitHub>"
-				},
-				{
-					"type": "mrkdwn",
-					"text": "<https://pypi.org/project/openai-utilities/|PyPI>"
-				},
-				{
-					"type": "mrkdwn",
-					"text": "<https://1drv.ms/o/s!AjvLD9YXU9jp0TV9DDU_lZvKeS6G?e=3KWV3M|OneNote>"
-				}
-			]
-		}
-	]
+        except SlackApiError: # slack channel is inaccessible
+            _channels[channel_id] = {
+				"name": "INACCESSIBLE",
+				"is_im": False
+			}             
+        
+    return _channels[channel_id]
+ 
