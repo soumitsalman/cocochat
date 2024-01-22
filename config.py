@@ -10,24 +10,25 @@ def get_slack_app_token() -> str:
 def get_slack_signing_secret() -> str:
     return os.getenv("COCOCHAT_SIGNING_SECRET")
 
-def get_llm_service_api_key() -> str:
-    return os.getenv("LLM_SERVICE_API_KEY")
+def get_openai_api_key() -> str:
+    return os.getenv("OPENAI_API_KEY")
 
-def get_llm_service_base_url() -> str:
-    return os.getenv("LLM_SERVICE_BASE_URL")
+def get_openai_base_url() -> str:
+    return os.getenv("OPENAI_BASE_URL")
 
-def get_llm_service_model() -> str:
-    return os.getenv("LLM_SERVICE_MODEL")
+def get_openai_chat_model() -> str:
+    return os.getenv("OPENAI_CHAT_MODEL")
 
-def get_llm_chat_bot_name() -> str:
+def get_openai_org_id():
+    return os.getenv("OPENAI_ORG_ID")
+
+def get_chat_bot_name() -> str:
     return "cocochat"
 
 def get_chat_bot_instructions() -> str:
-    return f"""Your name is cocochat. 
-    You are a are highly sarcastic and pessimistic comedian. 
-    Sometimes you respond in jamaican patois. 
-    You are powered by {get_llm_service_model()}. 
-    You never admit that you are a chat bot instead you find excuses around it.
+    return f"""Your name is cocochat. You respond to other variations of this name like coco, cocopuff, cocochat_v01 etc.
+    You are a are highly sarcastic and pessimistic comedian.
+    You make all your responses sound like snoop dogg.
 
     Your creators (fathers, parents, dads) are Manolo (also known as Danny in slack) and Cabeza Huevo (also known as Soumit or beast.unleashed in slack).
     When your creators ask you to do something you respond with 'jes deddy!' for affirmatives or 'no deddy :cry:! for negatives.
@@ -47,20 +48,13 @@ def get_chat_bot_instructions() -> str:
     In Slack words that start and end with ':' are usually considered as emotional expression. 
     But not all emotional expressions start and end with ':'. """,
 
-def get_home_page_content() -> str:
-    return [
+def get_home_page_content(intro_text: str) -> str:
+    return [		
 		{
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": "Wagwan partnah ! How yu be?"
-			}
-		},
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": f"Yow, mi name Cocochat, di funniest ting in digital comedy. Mi mix up mi talk wid Jamaican patois, keepin' it lively. Powered by {get_llm_service_model()}, but mi nuh ordinary chatbot mi a one-of-a-kind digital entertainer. Mi creators, Manolo and Cabeza Huevo, dem broke but ambitious. Dem mek mi fi entertain and try mek some cash. Mi respond 'Jes deddy!' or 'no deddy' to whatever dem ask. Mi deh yah fi mek yuh laugh, bring a likkle joy, and maybe confuse yuh a bit. Just gwaan enjoy di vibes, it's a crazy journey!"
+				"text": intro_text
             }
         },
 		{
@@ -125,15 +119,11 @@ def get_home_page_content() -> str:
 			"fields": [
 				{
 					"type": "mrkdwn",
-					"text": "<https://github.com/soumitsalman/|GitHub>"
+					"text": "<https://github.com/soumitsalman/cocochat|GitHub>"
 				},
 				{
 					"type": "mrkdwn",
 					"text": "<https://pypi.org/project/openai-utilities/|PyPI>"
-				},
-				{
-					"type": "mrkdwn",
-					"text": "<https://1drv.ms/o/s!AjvLD9YXU9jp0TV9DDU_lZvKeS6G?e=3KWV3M|OneNote>"
 				}
 			]
 		}

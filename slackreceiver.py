@@ -2,7 +2,7 @@ import config
 from icecream import ic
 from slack_bolt import App
 from slack_sdk.errors import SlackApiError
-from chatsessions import queue_user_message, get_response, switch_model
+import chatmanager as cm
 import re
 
 # set up the initial app
@@ -14,45 +14,39 @@ app = App(
 @app.message()
 def receive_message(message, say, client): 
     new_message(
-        message_or_event = message, 
-        # in a DM the conversation or call out of the bot name is usually ping pong, so respond
-        needs_response=((message['channel_type'] == "im") or config.get_llm_chat_bot_name() in message['text']), 
+        message_or_event = message,         
         say = say, 
         slack_client = client, 
+        # in a DM the conversation or call out of the bot name is usually ping pong, so respond
+        needs_response=_needs_response(message)
     )
 
 @app.event("app_mention")
 def receive_mention(event, say, client):
     new_message(
-        message_or_event = event,
-        needs_response=True, # always respond when mentioned
+        message_or_event = event,        
         say=say, 
-        slack_client=client
+        slack_client=client,
+        needs_response=True # always respond when mentioned
     )
-
-@app.command("/model")
-def receive_command(ack, say, command):
-    ack()
-    new_model = command['text'].strip()
-    res = switch_model(command['channel_id'], new_model)
-    say(f":exclamation: Running model {new_model}" if res else ":shit: Failed updating model")
 
 @app.event("app_home_opened")
 def update_home_tab(client, event):
-    client.views_publish(
-        user_id = event['user'],
-        view = {
-            "type": "home",
-            "blocks": get_home_page_blocks(event['user'])
-        }
-    )
+    if event['tab'] == "home":
+        client.views_publish(
+            user_id = event['user'],
+            view = {
+                "type": "home",
+                "blocks": get_home_page_blocks(client, event['user'])
+            }
+        )
 
-def new_message(message_or_event, needs_response, say, slack_client):     
+def new_message(message_or_event, say, slack_client, needs_response):  
     # queue message no matter what    
-    queue_user_message(
+    cm.add_user_message(
         message_or_event['channel'], 
         get_user_data(message_or_event['user'], slack_client)['name'], 
-        ic(sanitize_message_text(message_or_event['text'], slack_client)))
+        _sanitize_message_text(message_or_event['text'], slack_client))
 
     # either IM or got mentoned
     if needs_response:
@@ -62,13 +56,16 @@ def new_message(message_or_event, needs_response, say, slack_client):
             timestamp = message_or_event["ts"],
             name = "hourglass_flowing_sand"
         )
-        resp = get_response(message_or_event['channel'])
+        resp = cm.get_bot_response(message_or_event['channel'])
         say(
             text = resp,
-            blocks=[create_markdown_block(resp)]
+            blocks=[_create_markdown_block(resp)]
         )
 
-def sanitize_message_text(text: str, slack_client):
+def _needs_response(message_or_event):
+    return ((message_or_event['channel_type'] == "im") or config.get_chat_bot_name() in message_or_event['text'])
+
+def _sanitize_message_text(text: str, slack_client):
     # this is a function within a function because the signature of extract_ids function is allowed to take only 1 parameter as required by re.sub
     # this way i can use the slack_event value
 	def extract_ids(match):
@@ -84,7 +81,7 @@ def sanitize_message_text(text: str, slack_client):
 	return re.sub(r'<@[\w]+>|<#[\w]+\|[\w]*>', extract_ids, text)
 
 # create a markdown text block after converting openai markdowns to slack markdowns
-def create_markdown_block(text: str):
+def _create_markdown_block(text: str):
     conversions = {
         '**': '*',        # Bold
         '__': '_',        # Italic
@@ -108,16 +105,20 @@ def create_markdown_block(text: str):
     }
 
 # home page block
-def get_home_page_blocks(user_id):
-    return config.get_home_page_content()
+def get_home_page_blocks(slack_client, user_id):
+    name = get_user_data(user_id=user_id, slack_client=slack_client)['name']
+    cm.add_user_message(channel=cm.CHAT_MANAGER_CHANNEL, user = None, message = f"{name} wants to know who you are. Greet them as @{name} and tell him all about yourself. Make your responses sound like snoop dogg.")
+    resp = cm.get_bot_response(channel=cm.CHAT_MANAGER_CHANNEL)
+    return config.get_home_page_content(resp)
 
 # team/workspace data
 _users = {}
 _channels = {}
+_UNKNOWN_USER = "user"
+_INACCESSIBLE_CHANNEL = "INACCESSIBLE CHANNEL"
 # structure is expected to be
 # _users = {
 #     "<user_id_value>": {
-#         "id": "<user_id_value>",
 #         "name": "<name_value>",
 #         "long_name": "<long_name_value>"
 # 	}
@@ -125,10 +126,8 @@ _channels = {}
 
 # _channels = {
 #     "<channel_id_value>": {
-#         "id": "<channel_id_value>",
 #         "name": "<name_value>",
 #         "is_im": True/False,
-#		  "users": [ ... list of user ids ... ]
 # 	}
 # }
 
@@ -143,8 +142,8 @@ def get_user_data(user_id, slack_client):
 			}
         except SlackApiError: # user is in accessible
             _users[user_id] = {
-				"name": "UNKNOWN.USER",
-				"long_name": "UNKNOWN USER"
+				"name": _UNKNOWN_USER,
+				"long_name": _UNKNOWN_USER
 			}
             
     return _users[user_id]
@@ -160,7 +159,7 @@ def get_channel_data(channel_id, slack_client):
 			}
         except SlackApiError: # slack channel is inaccessible
             _channels[channel_id] = {
-				"name": "INACCESSIBLE",
+				"name": _INACCESSIBLE_CHANNEL,
 				"is_im": False
 			}             
         

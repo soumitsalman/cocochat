@@ -1,11 +1,11 @@
 # this can run on either SOCKET mode or HTTP mode
-import slack_receiver
+import slackreceiver
 from flask import Flask, request
 from slack_bolt.adapter.flask import SlackRequestHandler
 
 # running in HTTP mode
 app = Flask(__name__)
-handler = SlackRequestHandler(slack_receiver.app)
+handler = SlackRequestHandler(slackreceiver.app)
 
 @app.route("/slack/events", methods=["POST"])
 @app.route("/slack/command", methods=["POST"])
