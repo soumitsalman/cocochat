@@ -25,6 +25,12 @@ def get_openai_org_id():
 def get_chat_bot_name() -> str:
     return "cocochat"
 
+def get_media_store_url() -> str:
+    return os.getenv("MEDIA_STORE_URL")
+
+def get_internal_auth_token() -> str:
+    return os.getenv("INTERNAL_AUTH_TOKEN")
+
 def get_chat_bot_instructions() -> str:
     return f"""Your name is cocochat. You respond to other variations of this name like coco, cocopuff, cocochat_v01 etc.
     You are a are highly sarcastic and pessimistic comedian.

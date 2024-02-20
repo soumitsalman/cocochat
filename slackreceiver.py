@@ -1,9 +1,11 @@
+import datetime
 import config
 from icecream import ic
 from slack_bolt import App
 from slack_sdk.errors import SlackApiError
-import chatmanager as cm
+# import chatmanager as cm
 import re
+import requests
 
 # set up the initial app
 app = App(
@@ -41,26 +43,164 @@ def update_home_tab(client, event):
             }
         )
 
-def new_message(message_or_event, say, slack_client, needs_response):  
-    # queue message no matter what    
-    cm.add_user_message(
-        message_or_event['channel'], 
-        get_user_data(message_or_event['user'], slack_client)['name'], 
-        _sanitize_message_text(message_or_event['text'], slack_client))
+@app.command("/whatsnew")
+def receive_whatsnew(command, respond, ack):
+    ack()
+    items = get_new_items(command['user_name'], command['text'] )
+    for disp_block in get_displayblocks(items):
+        respond(blocks = disp_block)
+    
 
-    # either IM or got mentoned
-    if needs_response:
-        # wait_msg = say(":hourglass_flowing_sand: 'Ol On!")
-        slack_client.reactions_add(
-            channel = message_or_event["channel"],
-            timestamp = message_or_event["ts"],
-            name = "hourglass_flowing_sand"
-        )
-        resp = cm.get_bot_response(message_or_event['channel'])
-        say(
-            text = resp,
-            blocks=[_create_markdown_block(resp)]
-        )
+@app.action(re.compile("(positive|negative)"))
+def receive_content_action(ack, action, body):
+    ack()
+    action_id, content_id, username = action['action_id'], action['value'], body['user']['username']
+    post_user_engagement(username, content_id, action_id)
+
+def post_user_engagement(username, content_id, action_id):
+    auth_header = { "X-API-Key": config.get_internal_auth_token() }
+    content_id_split = content_id.split('@')
+    body = [
+        {
+            "username": username,
+            "usersource": "SLACK",
+            "cid": content_id_split[0],
+            "source": content_id_split[1],
+            "action": action_id 
+        }
+    ]
+    requests.post(
+        f"{config.get_media_store_url()}/engagements", 
+        json=body, 
+        headers=auth_header)
+    # ic(resp.status_code)
+
+def get_new_items(user, kind):
+    auth_header = { "X-API-Key": config.get_internal_auth_token() }
+
+    params = {
+        "username": user,
+        "usersource": "SLACK"        
+    }    
+    if kind:
+        params["kind"] = kind     
+        
+    resp = requests.get(
+        f"{config.get_media_store_url()}/contents", 
+        params = params, 
+        headers=auth_header)
+    return resp.json()
+
+def get_displayblocks(items):
+    date_element = lambda data: {
+        "type": "plain_text",
+        "text": f":date: {datetime.datetime.fromtimestamp(data.get('created')).strftime('%b %d, %Y')}"
+    }
+    tags_element = lambda data: {
+        "type": "plain_text",
+        "text": f":card_index_dividers: {data.get('tags')[0]}"
+    }
+    subs_element = lambda data: {
+        "type": "plain_text",
+        "text": f":busts_in_silhouette: {data.get('subscribers', 0)}"
+    }
+
+    post_banner = lambda data: {
+        "type": "context",
+        "elements": [            
+            {
+                "type": "plain_text",
+                "text": f":thumbsup: {data.get('likes', 0)}"
+            },
+            {
+                "type": "plain_text",
+                "text": f":left_speech_bubble: {data.get('comments', 0)}"
+            },   
+            subs_element(data),                            
+            tags_element(data),
+            date_element(data)
+        ]
+    }
+    channel_banner = lambda data: {
+        "type": "context",
+        "elements": [
+            subs_element(data),                            
+            tags_element(data)
+        ]
+    }
+    body = lambda data: {        
+		"type": "section",
+		"text": {
+			"type": "mrkdwn",
+			"text": f"[<{data.get('url')}|{data.get('channel')}>] *{data.get('title', '')}*\n{data.get('excerpt')}"
+		}
+    }
+    value = lambda data: f"{data.get('cid')}@{data.get('source')}"
+    
+    action = lambda data: {    
+		"type": "actions",
+		"elements": [
+			{
+                "action_id": f"positive",
+                "type": "button",
+				"text": {
+					"type": "plain_text",
+					"text": ":ok_hand:",
+                    "emoji": True
+				},
+				"value": value(data)
+			},
+			{
+                "action_id": f"negative",
+                "type": "button",
+				"text": {
+					"type": "plain_text",
+					"text": ":shit:",
+                    "emoji": True
+				},
+				"value": value(data)
+			}
+		]
+	}
+    
+    for item in items:
+        if item["kind"] == "channel":
+            new_set = [
+                channel_banner(item),
+                body(item),
+                action(item)
+            ]
+        else:
+            new_set = [
+                post_banner(item),
+                body(item),
+                action(item)
+            ]
+        yield new_set
+    
+    
+
+def new_message(message_or_event, say, slack_client, needs_response):  
+    say ("I actually don't do anything. I just sit here and look pretty")
+    # queue message no matter what    
+    # cm.add_user_message(
+    #     message_or_event['channel'], 
+    #     get_user_data(message_or_event['user'], slack_client)['name'], 
+    #     _sanitize_message_text(message_or_event['text'], slack_client))
+
+    # # either IM or got mentoned
+    # if needs_response:
+    #     # wait_msg = say(":hourglass_flowing_sand: 'Ol On!")
+    #     slack_client.reactions_add(
+    #         channel = message_or_event["channel"],
+    #         timestamp = message_or_event["ts"],
+    #         name = "hourglass_flowing_sand"
+    #     )
+    #     resp = cm.get_bot_response(message_or_event['channel'])
+    #     say(
+    #         text = resp,
+    #         blocks=[_create_markdown_block(resp)]
+    #     )
 
 def _needs_response(message_or_event):
     return ((message_or_event['channel_type'] == "im") or config.get_chat_bot_name() in message_or_event['text'])
@@ -106,10 +246,20 @@ def _create_markdown_block(text: str):
 
 # home page block
 def get_home_page_blocks(slack_client, user_id):
-    name = get_user_data(user_id=user_id, slack_client=slack_client)['name']
-    cm.add_user_message(channel=cm.CHAT_MANAGER_CHANNEL, user = None, message = f"{name} wants to know who you are. Greet them as @{name} and tell him all about yourself. Make your responses sound like snoop dogg.")
-    resp = cm.get_bot_response(channel=cm.CHAT_MANAGER_CHANNEL)
-    return config.get_home_page_content(resp)
+    # name = get_user_data(user_id=user_id, slack_client=slack_client)['name']
+    # cm.add_user_message(channel=cm.CHAT_MANAGER_CHANNEL, user = None, message = f"{name} wants to know who you are. Greet them as @{name} and tell him all about yourself. Make your responses sound like snoop dogg.")
+    # resp = cm.get_bot_response(channel=cm.CHAT_MANAGER_CHANNEL)
+    # return config.get_home_page_content(resp)
+    return [		
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": """/whatsnew <param-kind> <param-count> will give you all the new posts or channels that might be interesting to you. 
+<param-kind> can be either post or channel. <param-count> can be an int"""
+            }
+        }
+    ]
 
 # team/workspace data
 _users = {}
