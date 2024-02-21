@@ -34,6 +34,7 @@ def receive_mention(event, say, client):
 
 @app.event("app_home_opened")
 def update_home_tab(client, event):
+    ic("updating home page")
     if event['tab'] == "home":
         client.views_publish(
             user_id = event['user'],
@@ -46,6 +47,7 @@ def update_home_tab(client, event):
 @app.command("/whatsnew")
 def receive_whatsnew(command, respond, ack):
     ack()
+    ic("/whatsnew", command['user_name'], command['text'])
     items = get_new_items(command['user_name'], command['text'] )
     for disp_block in get_displayblocks(items):
         respond(blocks = disp_block)
@@ -54,7 +56,7 @@ def receive_whatsnew(command, respond, ack):
 @app.action(re.compile("(positive|negative)"))
 def receive_content_action(ack, action, body):
     ack()
-    action_id, content_id, username = action['action_id'], action['value'], body['user']['username']
+    action_id, content_id, username = ic(action['action_id'], action['value'], body['user']['username'])
     post_user_engagement(username, content_id, action_id)
 
 def post_user_engagement(username, content_id, action_id):
@@ -69,11 +71,10 @@ def post_user_engagement(username, content_id, action_id):
             "action": action_id 
         }
     ]
-    requests.post(
+    ic(requests.post(
         f"{config.get_media_store_url()}/engagements", 
         json=body, 
-        headers=auth_header)
-    # ic(resp.status_code)
+        headers=auth_header).status_code)
 
 def get_new_items(user, kind):
     auth_header = { "X-API-Key": config.get_internal_auth_token() }
@@ -89,7 +90,11 @@ def get_new_items(user, kind):
         f"{config.get_media_store_url()}/contents", 
         params = params, 
         headers=auth_header)
-    return resp.json()
+    
+    if ic(resp.status_code) == requests.codes["ok"]:
+        return resp.json()
+    else:
+        return []
 
 def get_displayblocks(items):
     date_element = lambda data: {
